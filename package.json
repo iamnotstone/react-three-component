@@ -22,5 +22,14 @@
   "bugs": {
     "url": "https://github.com/iamnotstone/react-three-component/issues"
   },
-  "homepage": "https://github.com/iamnotstone/react-three-component#readme"
+  "homepage": "https://github.com/iamnotstone/react-three-component#readme",
+  "dependencies": {
+    "react": "^15.6.1",
+    "react-redux": "^5.0.6",
+    "redux": "^3.7.2",
+    "three": "^0.87.1"
+  },
+  "devDependencies": {
+    "gulp": "^3.9.1"
+  }
 }
