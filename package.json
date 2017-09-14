@@ -1,0 +1,26 @@
+{
+  "name": "react-three-component",
+  "version": "1.0.0",
+  "description": "implement threejs directly",
+  "main": "index.js",
+  "directories": {
+    "example": "example"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamnotstone/react-three-component.git"
+  },
+  "keywords": [
+    "react",
+    "threejs"
+  ],
+  "author": "iamnotstone",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/iamnotstone/react-three-component/issues"
+  },
+  "homepage": "https://github.com/iamnotstone/react-three-component#readme"
+}
