@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>react-three-component</title>
+    <script type="text/javascript" src="./react.js"></script>
+    <script type="text/javascript" src="./react-dom.js"></script>
+    <script type="text/javascript" src="./three.min.js"></script>
+	  <script type="text/javascript" src="../dist/react-three-component.js"></script>
+	<script type="text/javascript" src="./TrackballControls.js"></script>
+    <script type="text/javascript" src="./browser.min.js"></script>
+
+    <style type="text/css">
+      body{
+			  margin:0;
+				width:100%
+			}
+    </style>
+  </head>
+  <body>
+    <div id="root" class="mainWindow"></div>
+    <script type="text/babel">
+		var geometry = new THREE.BoxGeometry(10,20,30)
+		var material = new THREE.MeshPhongMaterial( {
+			color: 0x1120f3,
+			specular: 0x202020,
+			emissive: 0x303030
+		})
+		var cube = new THREE.Mesh(geometry, material)
+
+    ReactDOM.render(
+		  <ReactThreeComponent.ReactThreeComponent 
+		    width = {window.innerWidth} 
+			  height = {window.innerHeight}
+				appendObjects = {[cube]}
+				dropObjects = {[]}
+			/> , document.getElementById('root'))
+
+    </script>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+      To begin the development, run `npm start` in this folder.
+      To create a production bundle, use `npm run build`.
+    -->
+  </body>
+</html>

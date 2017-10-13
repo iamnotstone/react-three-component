@@ -3,10 +3,10 @@ var rename = require('gulp-rename');
 var del = require('del');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
+var webpack = require('webpack-stream');
 
 gulp.task('clean',function(){
-	del(['./client/dist/js/*.js','./client/dist/css/*.css']);
-
+	del(['./dist/*.js']);
 });
 
 
@@ -21,7 +21,3 @@ gulp.task('build',function(callback){
 	runSequence('clean',['transpile'],callback)
 })
 
-
-gulp.task('watch',function(){
-	gulp.watch('./client/src/**/*.js',['build']);
-})
