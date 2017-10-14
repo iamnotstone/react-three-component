@@ -1,5 +1,4 @@
 var gulp = require('gulp');
-var rename = require('gulp-rename');
 var del = require('del');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
