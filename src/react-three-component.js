@@ -6,7 +6,21 @@ import * as THREE from 'three'
  *    width,
  *    appendObjects, [THREE.Object3D]
  *    dropObjects, [THREE.Object3D]
- *    viewState, {mode:"One of FIT_ALL_AXONO_VIEW ..." , trig: Bool}
+ *    viewState, {
+ *      mode:ENUM{
+ *        FIX_ALL,
+ *        FIT_SELECTE,
+ *        LEFT_VIEW,
+ *        RIGHT_VIEW,
+ *        FRONT_VIEW,
+ *        REAR_VIEW,
+ *        TOP_VIEW,
+ *        BOTTOM_VIEW,
+ *        AXONOMETRIC_VIEW,
+ *        FIT_ALL_AXONO_VIEW
+ *      },
+ *
+ *      trig: Bool}
  *  }
  *
  */
@@ -101,11 +115,14 @@ export class ReactThreeComponent extends React.Component{
     this.globalGroup = new THREE.Group()
     this.scene.add(this.globalGroup)
 		this.updateObjects()
+    if(this.props.viewState){
+      this.viewType = this.props.viewState.mode
+      this.applyViewType()
+    }
 	}
 
   animate(){
     if(this.isRotating || this.isMoving){
-      console.log('animate')
       if (Math.abs(this.previousXY[0] - this.currentXY[0]) >= 1 || 
 				Math.abs(this.previousXY[1] - this.currentXY[1]) >= 1) {
 
@@ -176,7 +193,52 @@ export class ReactThreeComponent extends React.Component{
 	shouldComponentUpdate(nextProps, nextState){
 		return true
 	}
+
+	applyViewType(){
+		switch(this.viewType){
+			case 'FIT_ALL':
+				this.fitAll()
+				break;
+			case 'FIT_ALL_AXONO_VIEW':
+				this.fitAllAndAxono()
+				break;
+			case 'AXONOMETRIC_VIEW':
+				this.axonometricView()
+				break;
+			case 'LEFT_VIEW':
+				this.leftView()
+				break;
+			case 'RIGHT_VIEW':
+				this.rightView()
+				break;
+			case 'FRONT_VIEW':
+				this.frontView()
+				break;
+			case 'REAR_VIEW':
+				this.rearView()
+				break;
+			case 'TOP_VIEW':
+				this.topView()
+				break;
+			case 'BOTTOM_VIEW':
+				this.bottomView()
+				break;
+			default:
+				break
+		}
+		this.viewType = null
+	}
+
+
   componentWillReceiveProps(nextProps){
+    console.log('received props')
+    if( (nextProps.viewState && this.props.viewState &&
+      nextProps.viewState.trig !== this.props.viewState.trig) ||
+      (nextProps.viewState && !this.props.viewState && nextProps.viewState.mode)
+    ){
+      this.viewType = nextProps.viewState.mode
+      this.applyViewType()
+    }
 	}
 
   componentDidUpdate(prevProps, prevState){
@@ -374,6 +436,183 @@ export class ReactThreeComponent extends React.Component{
 		this.scrollLength = event.deltaY
     this.animate()
 	}
+
+  computeBoundingSphere(){
+    let sphereList = [], sumX = 0, sumY = 0, sumZ = 0
+    this.globalGroup.children.forEach( obj => {
+      if(obj.geometry){
+        obj.geometry.computeBoundingSphere()
+        let geoCenter = obj.geometry.boundingSphere.center
+        geoCenter.applyMatrix4(obj.matrix)
+        sumX += geoCenter.x
+        sumY += geoCenter.y
+        sumZ += geoCenter.z
+        console.log('center', obj.geometry.boundingSphere.center) 
+        sphereList.push(obj.geometry.boundingSphere)
+      }
+    })
+
+    let l = sphereList.length
+    //set global center
+    if(sphereList.length > 0)
+    {
+      this.centerPoint.set(sumX / l, sumY / l, sumZ / l)
+      this.sphereRadius = 0
+      sphereList.forEach( sphere => {
+        let curR = sphere.center.distanceTo(this.centerPoint) + sphere.radius
+        this.sphereRadius = this.sphereRadius > curR ? this.sphereRadius : curR
+      })
+    }
+    else{
+      this.centerPoint.set(0,0,0)
+      this.sphereRadius = 0
+    }
+    //console.log('centerPoint', this.centerPoint, 'sphereRadius', this.sphereRadius)
+  }
+
+
+	fitAll = () => {
+		this.computeBoundingSphere()
+    let curPosition = new THREE.Vector3()
+    let curX = this.globalGroup.matrix.elements[12]
+    let curY = this.globalGroup.matrix.elements[13]
+    let curZ = this.globalGroup.matrix.elements[14]
+    curPosition.set(curX, curY, curZ)
+    let goalPosition = this.centerPoint.clone().multiplyScalar(-1)
+
+    let translationM = new THREE.Matrix4()
+      .setPosition(goalPosition.sub(curPosition))
+
+    this.globalGroup.applyMatrix(translationM)
+    this.zoom = this.sphereRadius / this.props.height * 2.5
+    this.animate()
+	}
+
+	fitAllAndAxono = () => {
+		this.computeBoundingSphere()
+		let translationM = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let rotationM1 = new THREE.Matrix4(), rotationM2 = new THREE.Matrix4(), rotationM3 = new THREE.Matrix4()
+
+		rotationM1.makeRotationY(-Math.PI / 4)
+		rotationM1.multiply(translationM)
+		rotationM2.makeRotationX(Math.PI / 4)
+		rotationM2.multiply(rotationM1)
+
+    this.globalGroup.matrix = rotationM2
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.zoom = this.sphereRadius / this.props.height * 2.5
+
+    this.animate()
+	}
+
+	axonometricView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let rotationM1 = new THREE.Matrix4(), rotationM2 = new THREE.Matrix4()
+		rotationM1.makeRotationY(-Math.PI / 4)
+		rotationM2.makeRotationX(Math.PI / 4)
+		translationM1.multiply(rotationM2.multiply(rotationM1.multiply(translationM2)))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	leftView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		M.makeRotationY(Math.PI/2)
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	rightView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		M.makeRotationY(- Math.PI/2)
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	topView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		M.makeRotationX( Math.PI/2)
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	bottomView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		M.makeRotationX(- Math.PI/2)
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	frontView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
+	rearView = () => {
+		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
+		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
+		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		let M = new THREE.Matrix4()
+		M.makeRotationY( Math.PI)
+		translationM1.multiply(M.multiply(translationM2))
+    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix.decompose(this.globalGroup.position, 
+      this.globalGroup.quaternion,
+      this.globalGroup.scale
+    )
+    this.animate()
+	}
+
 
   static divStyle = {
     height: '100%'

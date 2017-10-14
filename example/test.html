@@ -8,7 +8,6 @@
     <script type="text/javascript" src="./react-dom.js"></script>
     <script type="text/javascript" src="./three.min.js"></script>
 	  <script type="text/javascript" src="../dist/react-three-component.js"></script>
-	<script type="text/javascript" src="./TrackballControls.js"></script>
     <script type="text/javascript" src="./browser.min.js"></script>
 
     <style type="text/css">
@@ -26,21 +25,30 @@
   <body>
     <div id="root" class="mainWindow"></div>
     <script type="text/babel">
-		var geometry = new THREE.BoxGeometry(10,20,30)
-		var material = new THREE.MeshPhongMaterial( {
-			color: 0x1120f3,
-			specular: 0x202020,
-			emissive: 0x303030
-		})
-		var cube = new THREE.Mesh(geometry, material)
+		  var geometry = new THREE.BoxGeometry(10,20,30)
+		  var material = new THREE.MeshPhongMaterial( {
+			  color: 0x1120f3,
+			  specular: 0x202020,
+			  emissive: 0x303030
+		  })
+		  var cube = new THREE.Mesh(geometry, material)
+      let tr = new THREE.Matrix4()
+      tr.makeTranslation(10, 0, 0)
+      cube.applyMatrix(tr)
 
-    ReactDOM.render(
-		  <ReactThreeComponent.ReactThreeComponent 
-		    width = {document.body.clientWidth} 
-			  height = {document.body.clientHeight}
-				appendObjects = {[cube]}
-				dropObjects = {[]}
-			/> , document.getElementById('root'))
+
+      ReactDOM.render(
+		    <ReactThreeComponent.ReactThreeComponent 
+		      width = {document.body.clientWidth} 
+			    height = {document.body.clientHeight}
+				  appendObjects = {[cube]}
+				  dropObjects = {[]}
+          viewState = {{
+            mode: 'LEFT_VIEW',
+            trig: false
+          }}
+			  /> , document.getElementById('root')
+      )
 
     </script>
     <!--
