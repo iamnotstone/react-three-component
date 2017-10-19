@@ -1,5 +1,6 @@
 import React from 'react'
 import * as THREE from 'three'
+import PropTypes from 'prop-types'
 /*
  *  props{
  *    height,
@@ -81,6 +82,26 @@ export class ReactThreeComponent extends React.Component{
     this.zoom = 1
 	}
 
+  static propTypes = {
+    width: PropTypes.number.isRequired,
+    height: PropTypes.number.isRequired,
+    appendObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
+    dropObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
+    viewState: PropTypes.shape({
+      mode: PropTypes.string,
+      trig: PropTypes.bool
+    })
+  }
+
+  static defaultProps = {
+    appendObjects: [],
+    dropObjects: [],
+    viewState: {
+      mode: 'FIT_ALL',
+      trig: false
+    }
+  }
+
 	updateObjects(){
 	  this.props.dropObjects.forEach(obj => {
 		  this.globalGroup.remove(obj)
@@ -105,6 +126,7 @@ export class ReactThreeComponent extends React.Component{
 		
 		this.camera.position.set(0, 0, 1000)
 		this.light = new THREE.PointLight(0x505050,0.8)
+    console.log('light:',this.light)
 		this.camera.add(this.light)
 		this.scene.add(this.camera)
 	  this.renderer = new THREE.WebGLRenderer({antialias: true})

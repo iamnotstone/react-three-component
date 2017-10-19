@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/iamnotstone/react-three-component#readme",
   "dependencies": {
+    "prop-types": "^15.6.0",
     "react": "^15.5.3",
     "react-dom": "^15.5.3",
     "three": "^0.87.1"
