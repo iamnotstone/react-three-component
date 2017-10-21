@@ -7,21 +7,20 @@ import PropTypes from 'prop-types'
  *    width,
  *    appendObjects, [THREE.Object3D]
  *    dropObjects, [THREE.Object3D]
- *    viewState, {
- *      mode:ENUM{
- *        FIX_ALL,
- *        FIT_SELECTE,
- *        LEFT_VIEW,
- *        RIGHT_VIEW,
- *        FRONT_VIEW,
- *        REAR_VIEW,
- *        TOP_VIEW,
- *        BOTTOM_VIEW,
- *        AXONOMETRIC_VIEW,
- *        FIT_ALL_AXONO_VIEW
- *      },
+ *    mode:ENUM{
+ *      FIT_ALL,
+ *      FIT_SELECTE,
+ *      LEFT_VIEW,
+ *      RIGHT_VIEW,
+ *      FRONT_VIEW,
+ *      REAR_VIEW,
+ *      TOP_VIEW,
+ *      BOTTOM_VIEW,
+ *      AXONOMETRIC_VIEW,
+ *      FIT_ALL_AXONO_VIEW
+ *    },
  *
- *      trig: Bool}
+ *    trig: Bool
  *  }
  *
  */
@@ -87,26 +86,25 @@ export class ReactThreeComponent extends React.Component{
     height: PropTypes.number.isRequired,
     appendObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
     dropObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
-    viewState: PropTypes.shape({
-      mode: PropTypes.string,
-      trig: PropTypes.bool
-    })
+    mode: PropTypes.string,
+    trig: PropTypes.bool
   }
 
   static defaultProps = {
     appendObjects: [],
     dropObjects: [],
-    viewState: {
-      mode: 'FIT_ALL',
-      trig: false
-    }
+    mode: 'FIT_ALL',
+    trig: false
   }
 
-	updateObjects(){
-	  this.props.dropObjects.forEach(obj => {
+	updateObjects(props){
+	  props.dropObjects.forEach(obj => {
 		  this.globalGroup.remove(obj)
+      if(obj.geometry) obj.geometry.dispose()
+      if(obj.material) obj.material.dispose()
+      if(obj.texture) obj.texture.dispose()
 		})
-		this.props.appendObjects.forEach(obj => {
+		props.appendObjects.forEach(obj => {
 		  this.globalGroup.add(obj)
 		})
 		this.renderer.render(this.scene, this.camera)
@@ -126,7 +124,6 @@ export class ReactThreeComponent extends React.Component{
 		
 		this.camera.position.set(0, 0, 1000)
 		this.light = new THREE.PointLight(0x505050,0.8)
-    console.log('light:',this.light)
 		this.camera.add(this.light)
 		this.scene.add(this.camera)
 	  this.renderer = new THREE.WebGLRenderer({antialias: true})
@@ -136,9 +133,10 @@ export class ReactThreeComponent extends React.Component{
 
     this.globalGroup = new THREE.Group()
     this.scene.add(this.globalGroup)
-		this.updateObjects()
-    if(this.props.viewState){
-      this.viewType = this.props.viewState.mode
+		this.updateObjects(this.props)
+    
+    if(this.props.mode){
+      this.viewType = this.props.mode
       this.applyViewType()
     }
 	}
@@ -175,6 +173,7 @@ export class ReactThreeComponent extends React.Component{
     	}
 		}
 
+    //note: this.zoom can not be 0. once be zero,can never recoverd
 		if(this.scrollLength != 0){
 			let k
 			if(this.scrollLength > 0)
@@ -203,7 +202,7 @@ export class ReactThreeComponent extends React.Component{
 		window.addEventListener('resize', this._onDocumentResize, false)
 		document.addEventListener('contextmenu', this._onDocumentRightClick, false);
 		container.addEventListener('wheel', this._onDocumentWheel, false)
-		this.setState({})
+		//this.setState({})
 	}
 
   componentWillMount(){
@@ -213,7 +212,7 @@ export class ReactThreeComponent extends React.Component{
 	}
 
 	shouldComponentUpdate(nextProps, nextState){
-		return true
+		return false
 	}
 
 	applyViewType(){
@@ -254,16 +253,33 @@ export class ReactThreeComponent extends React.Component{
 
   componentWillReceiveProps(nextProps){
     console.log('received props')
-    if( (nextProps.viewState && this.props.viewState &&
-      nextProps.viewState.trig !== this.props.viewState.trig) ||
-      (nextProps.viewState && !this.props.viewState && nextProps.viewState.mode)
+    if(nextProps.appendObjects.length > 0 || nextProps.dropObjects.length > 0)
+      this.updateObjects(nextProps)
+    if( (nextProps.mode && this.props.mode &&
+      nextProps.trig !== this.props.trig) ||
+      (nextProps.mode && !this.props.mode)
     ){
-      this.viewType = nextProps.viewState.mode
+      this.viewType = nextProps.mode
       this.applyViewType()
     }
+
+    //check for width and height
+    if(nextProps.height != this.props.height || nextProps.width != this.props.width)
+    {
+		  this.renderer.setSize(nextProps.width, nextProps.height)
+      
+      this.camera.left = -nextProps.width * 0.5 * this.zoom
+      this.camera.right =  nextProps.width * 0.5 * this.zoom
+      this.camera.top = nextProps.height * 0.5 * this.zoom
+      this.camera.bottom = - nextProps.height * 0.5 * this.zoom
+      this.camera.updateProjectionMatrix()
+      
+    }
+    this.renderer.render(this.scene, this.camera)
 	}
 
   componentDidUpdate(prevProps, prevState){
+    //to check if width and height changed, or we have to resize the scene
 	}
 	componentWillUnmount(){
     const container = this.container;
@@ -460,6 +476,7 @@ export class ReactThreeComponent extends React.Component{
 	}
 
   computeBoundingSphere(){
+    /*
     let sphereList = [], sumX = 0, sumY = 0, sumZ = 0
     this.globalGroup.children.forEach( obj => {
       if(obj.geometry){
@@ -490,148 +507,171 @@ export class ReactThreeComponent extends React.Component{
       this.sphereRadius = 0
     }
     //console.log('centerPoint', this.centerPoint, 'sphereRadius', this.sphereRadius)
+    */
+    let box = new THREE.Box3().setFromObject(this.globalGroup)
+    let sphere = box.getBoundingSphere()
+    this.centerPoint = sphere.center
+    this.sphereRadius = sphere.radius
   }
 
 
 	fitAll = () => {
 		this.computeBoundingSphere()
-    let curPosition = new THREE.Vector3()
-    let curX = this.globalGroup.matrix.elements[12]
-    let curY = this.globalGroup.matrix.elements[13]
-    let curZ = this.globalGroup.matrix.elements[14]
-    curPosition.set(curX, curY, curZ)
-    let goalPosition = this.centerPoint.clone().multiplyScalar(-1)
+    if(this.sphereRadius > 0)
+    {
+     /* let curPosition = new THREE.Vector3()
+      let curX = this.globalGroup.matrix.elements[12]
+      let curY = this.globalGroup.matrix.elements[13]
+      let curZ = this.globalGroup.matrix.elements[14]
+      curPosition.set(curX, curY, curZ)*/
+      let goalPosition = this.centerPoint.clone().multiplyScalar(-1)
+      console.log('goalPosition:', goalPosition)
 
-    let translationM = new THREE.Matrix4()
-      .setPosition(goalPosition.sub(curPosition))
+      let translationM = new THREE.Matrix4()
+        .setPosition(goalPosition)
 
-    this.globalGroup.applyMatrix(translationM)
-    this.zoom = this.sphereRadius / this.props.height * 2.5
-    this.animate()
+      this.globalGroup.applyMatrix(translationM)
+      this.zoom = this.sphereRadius / this.props.height * 2.5
+
+      this.animate()
+    }
 	}
 
 	fitAllAndAxono = () => {
-		this.computeBoundingSphere()
-		let translationM = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
-		let rotationM1 = new THREE.Matrix4(), rotationM2 = new THREE.Matrix4(), rotationM3 = new THREE.Matrix4()
+		let rotationM1 = new THREE.Matrix4(), rotationM2 = new THREE.Matrix4()
 
 		rotationM1.makeRotationY(-Math.PI / 4)
-		rotationM1.multiply(translationM)
+		  //rotationM1.multiply(translationM)
 		rotationM2.makeRotationX(Math.PI / 4)
 		rotationM2.multiply(rotationM1)
-
     this.globalGroup.matrix = rotationM2
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
-    this.zoom = this.sphereRadius / this.props.height * 2.5
+		this.computeBoundingSphere()
+    if(this.sphereRadius > 0)
+    {
+		  let translationM = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+      this.globalGroup.applyMatrix(translationM)      
+      this.zoom = this.sphereRadius / this.props.height * 2.5
 
-    this.animate()
+      this.animate()
+    }
 	}
 
 	axonometricView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let rotationM1 = new THREE.Matrix4(), rotationM2 = new THREE.Matrix4()
 		rotationM1.makeRotationY(-Math.PI / 4)
 		rotationM2.makeRotationX(Math.PI / 4)
-		translationM1.multiply(rotationM2.multiply(rotationM1.multiply(translationM2)))
-    this.globalGroup.matrix = translationM1
+		rotationM2.multiply(rotationM1)
+    this.globalGroup.matrix = rotationM2
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
 	leftView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
 		M.makeRotationY(Math.PI/2)
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
+    
     this.animate()
 	}
 
 	rightView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
 		M.makeRotationY(- Math.PI/2)
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
 	topView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
 		M.makeRotationX( Math.PI/2)
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
 	bottomView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
 		M.makeRotationX(- Math.PI/2)
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
 	frontView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
 	rearView = () => {
-		let currentCenter = this.centerPoint.clone().applyMatrix4(this.globalGroup.matrix)
-		let translationM1 = new THREE.Matrix4().setPosition(currentCenter)
-		let translationM2 = new THREE.Matrix4().setPosition(this.centerPoint.clone().multiplyScalar(-1))
+		this.computeBoundingSphere()
+    this.prevCenter = this.centerPoint.clone()
 		let M = new THREE.Matrix4()
 		M.makeRotationY( Math.PI)
-		translationM1.multiply(M.multiply(translationM2))
-    this.globalGroup.matrix = translationM1
+    this.globalGroup.matrix = M
     this.globalGroup.matrix.decompose(this.globalGroup.position, 
       this.globalGroup.quaternion,
       this.globalGroup.scale
     )
+    this.computeBoundingSphere()
+    let translationM = new THREE.Matrix4().setPosition(this.prevCenter.sub(this.centerPoint))
+    this.globalGroup.applyMatrix(translationM)
     this.animate()
 	}
 
@@ -639,7 +679,6 @@ export class ReactThreeComponent extends React.Component{
   static divStyle = {
     height: '100%'
   }
-
   render(){
 		return (<div 
       ref = {

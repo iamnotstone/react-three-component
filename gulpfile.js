@@ -16,6 +16,11 @@ gulp.task('transpile',function(){
 	.pipe(gulp.dest('./dist/'));
 })
 
+gulp.task('install', function(){
+  return gulp.src('./dist/react-three-component.js')
+  .pipe(gulp.dest('../oycad/client/dist/js/lib/'))
+})
+
 gulp.task('build',function(callback){
 	runSequence('clean',['transpile'],callback)
 })
