@@ -20,7 +20,12 @@ import PropTypes from 'prop-types'
  *      FIT_ALL_AXONO_VIEW
  *    },
  *
- *    trig: Bool
+ *    trig: Bool,
+ *    onFeatureSelected,
+ *    onFeatureCtrlSelected,
+ *    onFeatureClicked,
+ *    onFeatureDeselected,
+ *    onFeatureDeselectedAll,
  *  }
  *
  */
@@ -59,6 +64,25 @@ function makeNormalizeMatrixOnAxis(m){
   te[9] *= invSz
   te[10] *= invSz
 }
+const HIGHLIGHT_COLOR = 0xffff00
+const SELECTED_COLOR = 0x00ffff
+
+function recoverAppearance(){
+  this.userData.interact = null
+  this.material.color.set(this.userData.oldColor) 
+  if(this.material.type == 'LineBasicMaterial')
+    this.material.linewidth = 1
+}
+
+function setSelected(){
+  if(!this.userData.interact)
+    this.userData.oldColor = this.material.color.getHex()
+  this.userData.interact = 'selected'
+  this.material.color.set(SELECTED_COLOR)
+  if(this.material.type == 'LineBasicMaterial')
+    this.material.linewidth = 3
+}
+
 
 export class ReactThreeComponent extends React.Component{
   constructor(props){
@@ -79,6 +103,11 @@ export class ReactThreeComponent extends React.Component{
 		this.viewType = null
 
     this.zoom = 1
+
+    this.mouse = new THREE.Vector2()
+    this.raycaster = new THREE.Raycaster()
+    this.raycaster.linePrecision = 1
+    this.oldColor = undefined
 	}
 
   static propTypes = {
@@ -87,7 +116,12 @@ export class ReactThreeComponent extends React.Component{
     appendObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
     dropObjects: PropTypes.arrayOf(PropTypes.instanceOf(THREE.Object3D)),
     mode: PropTypes.string,
-    trig: PropTypes.bool
+    trig: PropTypes.bool,
+    onFeatureSelected: PropTypes.func,
+    onFeatureCtrlSelected: PropTypes.func,
+    onFeatureClicked: PropTypes.func,
+    onFeatureDeselected: PropTypes.func,
+    onFeatureDeselectedAll: PropTypes.func
   }
 
   static defaultProps = {
@@ -123,7 +157,7 @@ export class ReactThreeComponent extends React.Component{
     )	
 		
 		this.camera.position.set(0, 0, 1000)
-		this.light = new THREE.PointLight(0x505050,0.8)
+		this.light = new THREE.PointLight(0xf0f0f0,1)
 		this.camera.add(this.light)
 		this.scene.add(this.camera)
 	  this.renderer = new THREE.WebGLRenderer({antialias: true})
@@ -182,13 +216,59 @@ export class ReactThreeComponent extends React.Component{
 				k = 0.9
 			this.zoom = this.zoom*k
 			this.scrollLength = 0
+
+      this.camera.left = this.props.width * -0.5 * this.zoom
+      this.camera.right = this.props.width * 0.5 * this.zoom
+      this.camera.top = this.props.height * 0.5 * this.zoom
+      this.camera.bottom = this.props.height * -0.5 * this.zoom
+      this.camera.updateProjectionMatrix() 
 		}
 
-    this.camera.left = this.props.width * -0.5 * this.zoom
-    this.camera.right = this.props.width * 0.5 * this.zoom
-    this.camera.top = this.props.height * 0.5 * this.zoom
-    this.camera.bottom = this.props.height * -0.5 * this.zoom
-    this.camera.updateProjectionMatrix() 
+    this.raycaster.setFromCamera(this.mouse, this.camera)
+    let intersects = this.raycaster.intersectObjects(this.globalGroup.children, true)
+
+    if ( intersects.length > 0 ) {
+      if(this.currentIntersected !== undefined){
+        if(this.currentIntersected.userData.interact == 'highlight')
+          this.currentIntersected.recoverAppearance()
+          /*this.currentIntersected.userData.interact = null
+          this.currentIntersected.material.color
+            .set(this.currentIntersected.userData.oldColor) 
+          if(this.currentIntersected.material.type == 'LineBasicMaterial')
+            this.currentIntersected.material.linewidth = 1*/
+        
+      }
+      this.currentIntersected = intersects[ 0 ].object;
+      if(!this.currentIntersected.userData.interact)
+      {
+        this.currentIntersected.userData.oldColor = 
+          this.currentIntersected.material.color.getHex()
+        this.currentIntersected.userData.interact = 'highlight'
+        this.currentIntersected.material.color.set(HIGHLIGHT_COLOR)
+        if(this.currentIntersected.material.type == 'LineBasicMaterial')
+          this.currentIntersected.material.linewidth = 3
+
+        this.currentIntersected.recoverAppearance = recoverAppearance
+        this.currentIntersected.setSelected = setSelected
+      }
+      //console.log('highlight:', this.currentIntersected)
+    } else {
+      if(this.currentIntersected != undefined){
+        if(this.currentIntersected.userData.interact == 'highlight'){
+          /*this.currentIntersected.userData.interact = null
+          this.currentIntersected.material.color
+            .set(this.currentIntersected.userData.oldColor) 
+          if(this.currentIntersected.material.type == 'LineBasicMaterial')
+            this.currentIntersected.material.linewidth = 1*/
+          this.currentIntersected.recoverAppearance()
+        }
+      }
+      this.currentIntersected = undefined;
+    }
+
+
+
+    
     this.renderer.render(this.scene, this.camera)
   }
 
@@ -198,6 +278,9 @@ export class ReactThreeComponent extends React.Component{
     const container = this.container;     
     container.addEventListener('mousedown', this._onDocumentMouseDown, false);
     container.addEventListener('touchstart', this._onDocumentTouchStart, false);
+    container.addEventListener('mousemove', this._onDocumentMouseMove, false);
+    container.addEventListener('dblclick', this._onDoubleClick, false);
+    container.addEventListener('click', this._onClick, false);
     document.addEventListener('touchmove', this._onDocumentTouchMove, false);  
 		window.addEventListener('resize', this._onDocumentResize, false)
 		document.addEventListener('contextmenu', this._onDocumentRightClick, false);
@@ -252,7 +335,6 @@ export class ReactThreeComponent extends React.Component{
 
 
   componentWillReceiveProps(nextProps){
-    console.log('received props')
     if(nextProps.appendObjects.length > 0 || nextProps.dropObjects.length > 0)
       this.updateObjects(nextProps)
     if( (nextProps.mode && this.props.mode &&
@@ -285,17 +367,53 @@ export class ReactThreeComponent extends React.Component{
     const container = this.container;
 	  container.removeEventListener('mousedown', this._onDocumentMouseDown, false);
     container.removeEventListener('touchstart', this._onDocumentTouchStart, false);
+    container.removeEventListener('mousemove', this._onDocumentMouseMove, false);
+    container.removeEventListener('dblclick', this._onDoubleClick, false);
+    container.removeEventListener('click', this._onClick, false);
 	  document.removeEventListener('touchmove', this._onDocumentTouchMove, false);
 		document.removeEventListener('touchend', this._onDocumentTouchEnd, false)
 
 		document.removeEventListener('resize', this._onDocumentResize, false)
 
-    document.removeEventListener('mousemove', this._onDocumentMouseMove, false);
+    document.removeEventListener('mousemove', this._onTransDocumentMouseMove, false);
     document.removeEventListener('mouseup', this._onDocumentMouseUp, false);
     document.removeEventListener('mouseout', this._onDocumentMouseOut, false);
 		document.removeEventListener('contextmenu', this._onDocumentRightClick, false);
 		container.removeEventListener('wheel', this._onDocumentWheel, false)
   }
+
+
+  _onDoubleClick = (event) => {
+    event.preventDefault()
+    if(this.currentIntersected){
+      let mouseXY = [event.clientX, event.clientY]
+      this.props.onFeatureClicked(this.currentIntersected, mouseXY)
+    }
+  }
+
+  _onClick = (event) => {
+    event.preventDefault()
+    if(this.isOperating)
+    {
+      this.isOperating = false
+      return
+    }
+    if(this.currentIntersected){
+      if(event.ctrlKey)
+      {
+        if(this.currentIntersected.userData.interact == 'selected')
+          this.props.onFeatureDeselected(this.currentIntersected)
+        else
+          this.props.onFeatureCtrlSelected(this.currentIntersected)
+      }
+      else
+        this.props.onFeatureSelected(this.currentIntersected)
+    }
+    else
+      this.props.onFeatureDeselectedAll()
+  }
+
+  _
 
 	_onDocumentRightClick = (event) =>{
 		event.preventDefault()
@@ -303,10 +421,10 @@ export class ReactThreeComponent extends React.Component{
 
 
 	_onDocumentMouseDown = (event) => { 
-    	event.preventDefault()
+    event.preventDefault()
 		//console.log('button', event.button)
 		let clientRect = this.container.getBoundingClientRect()
-    document.addEventListener('mousemove', this._onDocumentMouseMove, false)
+    document.addEventListener('mousemove', this._onTransDocumentMouseMove, false)
     document.addEventListener('mouseup', this._onDocumentMouseUp, false)
     document.addEventListener('mouseout', this._onDocumentMouseOut, false)
     const windowHalfX = (clientRect.left + clientRect.right) / 2
@@ -321,10 +439,12 @@ export class ReactThreeComponent extends React.Component{
 			this.isRotating = true
 		else if(event.button == 2)
 			this.isMoving = true
-
-
 	}
-	_onDocumentMouseMove = (event) => {
+
+
+	_onTransDocumentMouseMove = (event) => {
+    event.preventDefault()
+    this.isOperating = true
 		let clientRect = this.container.getBoundingClientRect()
     const windowHalfX = (clientRect.left + clientRect.right) / 2
 		const windowHalfY = (clientRect.top + clientRect.bottom) / 2
@@ -334,10 +454,20 @@ export class ReactThreeComponent extends React.Component{
     this.animate()
 	}
 
-
+  _onDocumentMouseMove = (event) => {
+    event.preventDefault()
+		let clientRect = this.container.getBoundingClientRect()
+    const windowHalfX = (clientRect.left + clientRect.right) / 2
+    let windowX = clientRect.right - clientRect.left
+		const windowHalfY = (clientRect.top + clientRect.bottom) / 2
+    let windowY = clientRect.bottom - clientRect.top
+    this.mouse.x = 2 * (event.clientX - windowHalfX) / windowX
+    this.mouse.y = -2 * (event.clientY - windowHalfY) / windowY
+    this.animate()
+  }
 
 	_onDocumentMouseUp = () => {
-    document.removeEventListener('mousemove', this._onDocumentMouseMove, false);
+    document.removeEventListener('mousemove', this._onTransDocumentMouseMove, false);
     document.removeEventListener('mouseup', this._onDocumentMouseUp, false);
     document.removeEventListener('mouseout', this._onDocumentMouseOut, false);
 		this.isRotating = false
@@ -525,7 +655,6 @@ export class ReactThreeComponent extends React.Component{
       let curZ = this.globalGroup.matrix.elements[14]
       curPosition.set(curX, curY, curZ)*/
       let goalPosition = this.centerPoint.clone().multiplyScalar(-1)
-      console.log('goalPosition:', goalPosition)
 
       let translationM = new THREE.Matrix4()
         .setPosition(goalPosition)
